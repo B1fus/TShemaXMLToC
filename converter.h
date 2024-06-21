@@ -90,6 +90,8 @@ public:
     void addBlock(SchemaBlock* block);
     SchemaBlock* getBlock(size_t id);
     std::map<int, SchemaBlock*>& getMap();
+    void clear();
+    ~SchemaContext();
 };
 
 class SchemaConverter{
@@ -100,11 +102,19 @@ class SchemaConverter{
     std::vector<size_t> _inputBlocks;
     std::vector<size_t> _outBlocks;
     tinyxml2::XMLDocument _xmlDoc;
+
     void _stepInsert(SchemaBlock* block);
     std::pair<size_t, size_t> _parseLineInOut(const std::string& lineValue) const;
+    void _initBlocksFromXML();
+    void _generateStepList();
+    void _createCFile(const std::string& filename) const;
+    void _clear();
 public:
-    SchemaConverter(std::string XMLfilename, std::string contextName);
-    void convert(std::string filename);
+    SchemaConverter(const std::string& XMLfilename, const std::string& contextName);
+    void convert(const std::string& filename);
+    void openXMLFile(const std::string& filename);
+    void setContextName(const std::string& name);
+    ~SchemaConverter();
 };
 
 } // namespace ML

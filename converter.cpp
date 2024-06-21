@@ -86,6 +86,17 @@ std::map<int, SchemaBlock *> &SchemaContext::getMap(){
     return _map;
 }
 
+void SchemaContext::clear(){
+    for(auto& i : _map){
+        delete i.second;
+    }
+    _map.clear();
+}
+
+SchemaContext::~SchemaContext(){
+    clear();
+}
+
 AddBlock::AddBlock(size_t id):SchemaBlock(id){
     _inCounter = 2;
     _isIn1Negative = _isIn2Negative = 0;
@@ -186,20 +197,12 @@ std::pair<size_t, size_t> SchemaConverter::_parseLineInOut(const std::string &li
     return result;
 }
 
-SchemaConverter::SchemaConverter(std::string XMLfilename, std::string contextName){
-    _context = new SchemaContext(contextName);
-    if(tinyxml2::XML_SUCCESS != _xmlDoc.LoadFile(XMLfilename.c_str()))
-        std::cout<<"Cannot open file\n";
-}
-
-void SchemaConverter::convert(std::string filename){
-    tinyxml2::XMLPrinter printer;
+void SchemaConverter::_initBlocksFromXML(){
     auto currNode = _xmlDoc.FirstChild()->NextSibling()->FirstChild();
     while(currNode != nullptr){
         auto elem = currNode->ToElement();
         if(std::strcmp(elem->Name(), "Block") == 0){
-            std::cout<<elem->Attribute("BlockType")<<" ";
-
+            //init blocks
             std::string type = elem->Attribute("BlockType");
             size_t id = std::stoul(elem->Attribute("SID"));
             ML::SchemaBlock* addedBlock;
@@ -237,10 +240,9 @@ void SchemaConverter::convert(std::string filename){
             _context->addBlock(addedBlock);
         }
         else if(std::strcmp(elem->Name(), "Line") == 0){
-            std::cout<<"Line ";
+            //connect blocks
             auto src = tinyxml2::findAllValuesByAttribute(elem, "Name", "Src");
             auto dst = tinyxml2::findAllValuesByAttribute(elem, "Name", "Dst");
-            std::cout<<_parseLineInOut(dst[0]).first<<" "<<_parseLineInOut(dst[0]).second<<"-";
 
             auto srcPair = _parseLineInOut(src[0]);
             SchemaBlock* srcBlock = _context->getBlock(srcPair.first);
@@ -255,9 +257,11 @@ void SchemaConverter::convert(std::string filename){
 
         currNode = currNode->NextSibling();
     }
-    
+    std::sort(_outBlocks.begin(), _outBlocks.end());
+}
 
-
+void SchemaConverter::_generateStepList(){
+    //deferrend blocks are inserting in the end of generate function
     _genStepInsert = _genStepList.begin();
     for(auto i: _deferredBlocks){
         _stepInsert(_context->getBlock(i));
@@ -267,9 +271,9 @@ void SchemaConverter::convert(std::string filename){
     for(auto i: _inputBlocks){
         _stepInsert(_context->getBlock(i));
     }
+}
 
-
-
+void SchemaConverter::_createCFile(const std::string &filename) const{
     std::ofstream outFile(filename);
     std::string ctxName = _context->getName();
     outFile<<"#include \"" << ctxName <<"_run.h\"\n";
@@ -277,6 +281,9 @@ void SchemaConverter::convert(std::string filename){
 
     outFile<<"static struct{\n";
     for(const auto& i: _context->getMap()){
+        //dont write out variable to file
+        auto lower = std::lower_bound(_outBlocks.begin(), _outBlocks.end(), i.second->getId());
+        if(lower == _outBlocks.end() || *lower != i.second->getId())
         outFile<<"\tdouble "<<i.second->getName()<<";\n";
     }
     outFile<<"} " <<ctxName<<";\n\n";
@@ -310,6 +317,39 @@ void SchemaConverter::convert(std::string filename){
            <<"const size_t "<<ctxName<<"_generated_ext_ports_size = sizeof(ext_ports);\n";
 
     outFile.close();
+}
+
+void SchemaConverter::_clear(){
+    _genStepList.clear();
+    _deferredBlocks.clear();
+    _inputBlocks.clear();
+    _outBlocks.clear();
+}
+
+SchemaConverter::SchemaConverter(const std::string& XMLfilename, const std::string& contextName){
+    _context = new SchemaContext(contextName);
+    if(tinyxml2::XML_SUCCESS != _xmlDoc.LoadFile(XMLfilename.c_str()))
+        std::cout<<"Cannot open file\n";
+}
+
+void SchemaConverter::convert(const std::string& filename){
+    _initBlocksFromXML();
+    _generateStepList();
+    _createCFile(filename);
+}
+
+void SchemaConverter::openXMLFile(const std::string &filename){
+    if(tinyxml2::XML_SUCCESS != _xmlDoc.LoadFile(filename.c_str()))
+        std::cout<<"Cannot open file\n";
+}
+
+void SchemaConverter::setContextName(const std::string &name){
+    if(_context != nullptr) delete _context;
+    _context = new SchemaContext(name);
+}
+
+SchemaConverter::~SchemaConverter(){
+    _clear();
 }
 
 }; // namespace ML

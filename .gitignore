@@ -1,0 +1,4 @@
+build/
+.vscode/
+paths.h
+out/

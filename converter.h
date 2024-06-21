@@ -4,6 +4,7 @@
 #include <list>
 #include <vector>
 #include <algorithm>
+#include <fstream>
 #include <tinyxml2.h>
 #include "xmlutils.h"
 
@@ -75,7 +76,9 @@ class OutBlock : public SchemaBlock{
 public:
     OutBlock(size_t id);
     std::string getCode(SchemaContext&) override;
+    void setIn(size_t port, SchemaBlock* block) override;
     void setIn(SchemaBlock* in);
+    SchemaBlock* getIn() const;
 };
 
 class SchemaContext{
@@ -86,6 +89,7 @@ public:
     std::string getName() const;
     void addBlock(SchemaBlock* block);
     SchemaBlock* getBlock(size_t id);
+    std::map<int, SchemaBlock*>& getMap();
 };
 
 class SchemaConverter{
@@ -94,6 +98,7 @@ class SchemaConverter{
     std::list<std::string>::iterator _genStepInsert;
     std::vector<size_t> _deferredBlocks;
     std::vector<size_t> _inputBlocks;
+    std::vector<size_t> _outBlocks;
     tinyxml2::XMLDocument _xmlDoc;
     void _stepInsert(SchemaBlock* block);
     std::pair<size_t, size_t> _parseLineInOut(const std::string& lineValue) const;

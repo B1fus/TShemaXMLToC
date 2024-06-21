@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <tinyxml2.h>
 #include "converter.h"
 #include "paths.h"
@@ -48,8 +49,10 @@ int main(){
     // std::cout<<(typeid((input))==typeid(ML::InputBlock*))<<"\n";
     // std::cout<<typeid(input).name() << " " <<typeid(ML::InputBlock*).name()<<"\n";
 
+    std::filesystem::create_directory(std::string(SOURCE_PATH)+"/out");
+
     ML::SchemaConverter converter(std::string(SOURCE_PATH) + "/data/1.xml", "nwocg");
-    converter.convert(std::string(SOURCE_PATH) + "1.c");
+    converter.convert(std::string(SOURCE_PATH) + "/out/1.c");
 
 
     return 0;

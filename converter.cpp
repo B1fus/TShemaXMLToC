@@ -82,6 +82,10 @@ SchemaBlock *SchemaContext::getBlock(size_t id){
     return _map[id];
 }
 
+std::map<int, SchemaBlock *> &SchemaContext::getMap(){
+    return _map;
+}
+
 AddBlock::AddBlock(size_t id):SchemaBlock(id){
     _inCounter = 2;
     _isIn1Negative = _isIn2Negative = 0;
@@ -134,8 +138,16 @@ std::string OutBlock::getCode(SchemaContext &){
     return "";
 }
 
+void OutBlock::setIn(size_t port, SchemaBlock* block){
+    if(port == 1) _in = block;
+}
+
 void OutBlock::setIn(SchemaBlock *in){
     _in = in;
+}
+
+SchemaBlock *OutBlock::getIn() const{
+    return _in;
 }
 
 void SchemaConverter::_stepInsert(SchemaBlock* block){
@@ -215,8 +227,10 @@ void SchemaConverter::convert(std::string filename){
                 addedBlock = new ML::UnitDelayBlock(id);
                 _deferredBlocks.push_back(id);
             }
-            else if(type == "Outport")
+            else if(type == "Outport"){
                 addedBlock = new ML::OutBlock(id);
+                _outBlocks.push_back(id);
+            }
             
             addedBlock->setName(elem->Attribute("Name"));
 
@@ -253,6 +267,49 @@ void SchemaConverter::convert(std::string filename){
     for(auto i: _inputBlocks){
         _stepInsert(_context->getBlock(i));
     }
+
+
+
+    std::ofstream outFile(filename);
+    std::string ctxName = _context->getName();
+    outFile<<"#include \"" << ctxName <<"_run.h\"\n";
+    outFile<<"#include <math.h>\n\n";
+
+    outFile<<"static struct{\n";
+    for(const auto& i: _context->getMap()){
+        outFile<<"\tdouble "<<i.second->getName()<<";\n";
+    }
+    outFile<<"} " <<ctxName<<";\n\n";
+
+    outFile<<"void " <<ctxName<<"_generated_init(){\n";
+    for(const auto i: _deferredBlocks){
+        outFile<< "\t" << ctxName<<"."<<_context->getBlock(i)->getName()<<" = 0;\n";
+    }
+    outFile<<"}\n\n";
+
+    outFile<<"void " <<ctxName<<"_generated_step(){\n";
+    for(const auto& i: _genStepList){
+        if(!i.empty()) outFile<< "\t" << i << "\n";
+    }
+    outFile<<"}\n\n";
+
+    outFile<<"static const "<<ctxName<<"_ExtPort ext_ports[] = {\n";
+    for(const auto& i: _outBlocks){
+        OutBlock* block= dynamic_cast<OutBlock*>(_context->getBlock(i));
+        outFile<<"\t { \""<<block->getName()<<"\", &"
+               <<ctxName<<"."<<block->getIn()->getName()<<", 0 },\n";
+    }
+    for(const auto& i: _inputBlocks){
+        SchemaBlock* block= _context->getBlock(i);
+        outFile<<"\t { \""<<block->getName()<<"\", &"
+               <<ctxName<<"."<<block->getName()<<", 1 },\n";
+    }
+    outFile<<"};\n\n";
+
+    outFile<<"const "<<ctxName<<"_ExtPort * const "<<ctxName<<"_generated_ext_ports = ext_ports;\n"
+           <<"const size_t "<<ctxName<<"_generated_ext_ports_size = sizeof(ext_ports);\n";
+
+    outFile.close();
 }
 
 }; // namespace ML

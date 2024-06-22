@@ -5,6 +5,9 @@
 #include <vector>
 #include <algorithm>
 #include <fstream>
+#include <unordered_map>
+#include <mutex>
+#include <functional>
 #include <tinyxml2.h>
 #include "xmlutils.h"
 
@@ -102,6 +105,11 @@ class SchemaConverter{
     std::vector<size_t> _inputBlocks;
     std::vector<size_t> _outBlocks;
     tinyxml2::XMLDocument _xmlDoc;
+    std::once_flag _createBlockFunctionsFlag;
+    static std::unordered_map<
+                std::string,
+                std::function<SchemaBlock*(size_t, tinyxml2::XMLElement*, SchemaConverter*)>
+                > _createBlockFunctions;
 
     void _stepInsert(SchemaBlock* block);
     std::pair<size_t, size_t> _parseLineInOut(const std::string& lineValue) const;
@@ -109,6 +117,7 @@ class SchemaConverter{
     void _generateStepList();
     void _createCFile(const std::string& filename) const;
     void _clear();
+    static void _initCreateBlockFunctions();
 public:
     SchemaConverter(const std::string& XMLfilename, const std::string& contextName);
     void convert(const std::string& filename);

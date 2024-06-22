@@ -207,37 +207,14 @@ void SchemaConverter::_initBlocksFromXML(){
             size_t id = std::stoul(elem->Attribute("SID"));
             ML::SchemaBlock* addedBlock;
 
-            //todo: map of string and functions
-            if(type == "Inport"){
-                addedBlock = new ML::InputBlock(id);
-                _inputBlocks.push_back(id);
+            if(!_createBlockFunctions.contains(type)){
+                std::cout<<"Error: Can't find function of block by \'"<<type<<"\' type.\n";
             }
-            else if(type == "Sum"){
-                auto* sumBlock = new ML::AddBlock(id);
-                std::string inputs = tinyxml2::findValueByAttribute(elem, "Name", "Inputs");
-                if(!inputs.empty()){
-                    sumBlock->setNegative(inputs[0] == '-', inputs[1] == '-');
-                }
-                addedBlock = sumBlock;
+            else{
+                addedBlock = _createBlockFunctions[type](id, elem, this);
+                addedBlock->setName(elem->Attribute("Name"));
+                _context->addBlock(addedBlock);
             }
-            else if(type == "Gain"){
-                auto* gainBlock = new ML::GainBlock(id);
-                std::string gain = tinyxml2::findValueByAttribute(elem, "Name", "Gain");
-                if(!gain.empty()) gainBlock->setCoef(gain);
-                addedBlock = gainBlock;
-            }
-            else if(type == "UnitDelay"){
-                addedBlock = new ML::UnitDelayBlock(id);
-                _deferredBlocks.push_back(id);
-            }
-            else if(type == "Outport"){
-                addedBlock = new ML::OutBlock(id);
-                _outBlocks.push_back(id);
-            }
-            
-            addedBlock->setName(elem->Attribute("Name"));
-
-            _context->addBlock(addedBlock);
         }
         else if(std::strcmp(elem->Name(), "Line") == 0){
             //connect blocks
@@ -327,6 +304,7 @@ void SchemaConverter::_clear(){
 }
 
 SchemaConverter::SchemaConverter(const std::string& XMLfilename, const std::string& contextName){
+    std::call_once(_createBlockFunctionsFlag, _initCreateBlockFunctions);
     _context = new SchemaContext(contextName);
     if(tinyxml2::XML_SUCCESS != _xmlDoc.LoadFile(XMLfilename.c_str()))
         std::cout<<"Cannot open file\n";
@@ -350,6 +328,49 @@ void SchemaConverter::setContextName(const std::string &name){
 
 SchemaConverter::~SchemaConverter(){
     _clear();
+}
+
+std::unordered_map<
+                std::string,
+                std::function<SchemaBlock*(size_t, tinyxml2::XMLElement*, SchemaConverter*)>
+> SchemaConverter::_createBlockFunctions{};
+
+void SchemaConverter::_initCreateBlockFunctions(){
+    _createBlockFunctions["Inport"] = 
+    [](size_t id, tinyxml2::XMLElement* elem, SchemaConverter* converter){
+        converter->_inputBlocks.push_back(id);
+        return new ML::InputBlock(id);
+    };
+
+    _createBlockFunctions["Sum"] =
+    [](size_t id, tinyxml2::XMLElement* elem, SchemaConverter* converter){
+        auto* sumBlock = new ML::AddBlock(id);
+        std::string inputs = tinyxml2::findValueByAttribute(elem, "Name", "Inputs");
+        if(!inputs.empty()){
+            sumBlock->setNegative(inputs[0] == '-', inputs[1] == '-');
+        }
+        return sumBlock;
+    };
+
+    _createBlockFunctions["Gain"] =
+    [](size_t id, tinyxml2::XMLElement* elem, SchemaConverter* converter){
+        auto* gainBlock = new ML::GainBlock(id);
+        std::string gain = tinyxml2::findValueByAttribute(elem, "Name", "Gain");
+        if(!gain.empty()) gainBlock->setCoef(gain);
+        return gainBlock;
+    };
+
+    _createBlockFunctions["UnitDelay"] =
+    [](size_t id, tinyxml2::XMLElement* elem, SchemaConverter* converter){
+        converter->_deferredBlocks.push_back(id);
+        return new ML::UnitDelayBlock(id);
+    };
+
+    _createBlockFunctions["Outport"] =
+    [](size_t id, tinyxml2::XMLElement* elem, SchemaConverter* converter){
+        converter->_outBlocks.push_back(id);
+        return new ML::OutBlock(id);
+    };
 }
 
 }; // namespace ML
